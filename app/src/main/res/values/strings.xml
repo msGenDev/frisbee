@@ -150,4 +150,6 @@
     <string name="event_info">Info</string>
     <string name="event_agenda">Agenda</string>
     <string name="event_more">More</string>
+    <string name="wtm">Women Techmakers</string>
+    <string name="wtm_description">Women Techmakers is Google\'s global program and brand for women in technology. It is about empowering women in technology through increased visibility, community, and resources. \n\n See https://www.womentechmakers.com</string>
 </resources>
