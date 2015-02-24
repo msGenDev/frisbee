@@ -36,6 +36,8 @@ import com.squareup.picasso.LruCache;
 import com.squareup.picasso.OkHttpDownloader;
 import com.squareup.picasso.Picasso;
 
+import net.danlew.android.joda.JodaTimeAndroid;
+
 import org.gdg.frisbee.android.BuildConfig;
 import org.gdg.frisbee.android.Const;
 import org.gdg.frisbee.android.R;
@@ -127,6 +129,8 @@ public class App extends Application implements LocationListener {
         mLocationFinder = new GingerbreadLastLocationFinder(this);
         mLocationFinder.setChangedLocationListener(this);
         updateLastLocation();
+
+        JodaTimeAndroid.init(this);
     }
 
     public void migrate(int oldVersion, int newVersion) {
