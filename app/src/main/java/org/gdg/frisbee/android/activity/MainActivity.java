@@ -28,15 +28,12 @@ import android.support.v4.view.ViewPager;
 import android.support.v7.app.ActionBar;
 import android.text.format.Time;
 
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 
 import org.gdg.frisbee.android.Const;
 import org.gdg.frisbee.android.R;
 import org.gdg.frisbee.android.adapter.ChapterAdapter;
-import org.gdg.frisbee.android.api.ApiRequest;
 import org.gdg.frisbee.android.api.GroupDirectory;
 import org.gdg.frisbee.android.api.model.Chapter;
 import org.gdg.frisbee.android.api.model.Directory;
@@ -58,6 +55,8 @@ import java.util.List;
 import butterknife.InjectView;
 import de.keyboardsurfer.android.widget.crouton.Crouton;
 import de.keyboardsurfer.android.widget.crouton.Style;
+import retrofit.Callback;
+import retrofit.RetrofitError;
 import timber.log.Timber;
 
 public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNavigationListener {
@@ -65,17 +64,14 @@ public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNa
     public static final String SECTION_EVENTS = "events";
     public static final int REQUEST_FIRST_START_WIZARD = 100;
     private static final int PLAY_SERVICE_DIALOG_REQUEST_CODE = 200;
+    private final GroupDirectory client = new GroupDirectory();
     @InjectView(R.id.pager)
     ViewPager mViewPager;
-
     @InjectView(R.id.sliding_tabs)
     SlidingTabLayout mSlidingTabLayout;
-
     private Handler mHandler = new Handler();
-
     private ChapterAdapter mSpinnerAdapter;
     private ChapterFragmentPagerAdapter mViewPagerAdapter;
-    private ApiRequest mFetchChaptersTask;
 
     private boolean mFirstStart = false;
 
@@ -93,8 +89,6 @@ public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNa
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        GroupDirectory client = new GroupDirectory();
-
         mLocationComparator = new ChapterComparator(mPreferences);
 
         mSlidingTabLayout.setCustomTabView(R.layout.tab_indicator, android.R.id.text1);
@@ -106,26 +100,6 @@ public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNa
         getSupportActionBar().setNavigationMode(ActionBar.NAVIGATION_MODE_LIST);
         getSupportActionBar().setListNavigationCallbacks(mSpinnerAdapter, MainActivity.this);
         getSupportActionBar().setDisplayUseLogoEnabled(true);
-
-        mFetchChaptersTask = client.getDirectory(new Response.Listener<Directory>() {
-            @Override
-            public void onResponse(final Directory directory) {
-                getSupportActionBar().setListNavigationCallbacks(mSpinnerAdapter, MainActivity.this);
-                App.getInstance().getModelCache().putAsync(Const.CACHE_KEY_CHAPTER_LIST_HUB, directory, DateTime.now().plusDays(1), new ModelCache.CachePutListener() {
-                    @Override
-                    public void onPutIntoCache() {
-                        ArrayList<Chapter> chapters = directory.getGroups();
-                        initChapters(chapters);
-                    }
-                });
-            }
-        }, new Response.ErrorListener() {
-            @Override
-            public void onErrorResponse(VolleyError volleyError) {
-                Crouton.makeText(MainActivity.this, getString(R.string.fetch_chapters_failed), Style.ALERT).show();
-                Timber.e("Could'nt fetch chapter list", volleyError);
-            }
-        });
 
         if (savedInstanceState == null) {
 
@@ -148,7 +122,7 @@ public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNa
                 @Override
                 public void onNotFound(String key) {
                     if (Utils.isOnline(MainActivity.this)) {
-                        mFetchChaptersTask.execute();
+                        fetchChapters();
                     } else {
                         Crouton.makeText(MainActivity.this, getString(R.string.offline_alert), Style.ALERT).show();
                     }
@@ -162,7 +136,7 @@ public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNa
                 Chapter selectedChapter = savedInstanceState.getParcelable("selected_chapter");
                 initChapters(chapters, selectedChapter);
             } else {
-                mFetchChaptersTask.execute();
+                fetchChapters();
             }
         }
 
@@ -191,9 +165,9 @@ public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNa
 
     /**
      * Initializes ViewPager, SlidingTabLayout, and Spinner Navigation.
-     *
+     * <p/>
      * It tries to get selected chapter from Intent Extras,
-     *                                  if not found, gets the first Chapter in the array.
+     * if not found, gets the first Chapter in the array.
      * This function is called after cache query or network call is success
      *
      * @param chapters Chapter array to be initialized, never null.
@@ -217,12 +191,33 @@ public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNa
         initChapters(chapters, selectedChapter);
     }
 
+    public void fetchChapters() {
+        client.getHub().getDirectory(new Callback<Directory>() {
+
+            public void success(final Directory directory, retrofit.client.Response response) {
+                getSupportActionBar().setListNavigationCallbacks(mSpinnerAdapter, MainActivity.this);
+                App.getInstance().getModelCache().putAsync(Const.CACHE_KEY_CHAPTER_LIST_HUB, directory, DateTime.now().plusDays(1), new ModelCache.CachePutListener() {
+                    @Override
+                    public void onPutIntoCache() {
+                        ArrayList<Chapter> chapters = directory.getGroups();
+                        initChapters(chapters);
+                    }
+                });
+            }
+
+            public void failure(RetrofitError error) {
+                Crouton.makeText(MainActivity.this, getString(R.string.fetch_chapters_failed), Style.ALERT).show();
+                Timber.e("Could'nt fetch chapter list", error);
+            }
+        });
+    }
+
     /**
      * Initializes ViewPager, SlidingTabLayout, and Spinner Navigation.
      * This function is called after cache query or network call is success,
      * or after an orientation change using savedInstance.
-     *  
-     * @param chapters Chapter array to be initialized, never null.
+     *
+     * @param chapters        Chapter array to be initialized, never null.
      * @param selectedChapter selectedChapter, never null.
      */
     private void initChapters(@NonNull ArrayList<Chapter> chapters,
@@ -248,8 +243,8 @@ public class MainActivity extends GdgNavDrawerActivity implements ActionBar.OnNa
     }
 
     protected String getTrackedViewName() {
-        if (mViewPager == null 
-                || mViewPagerAdapter == null 
+        if (mViewPager == null
+                || mViewPagerAdapter == null
                 || mViewPagerAdapter.getSelectedChapter() == null) {
             return "Main";
         }

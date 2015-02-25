@@ -15,8 +15,6 @@ import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.google.android.gms.appstate.AppStateManager;
 import com.google.android.gms.appstate.AppStateStatusCodes;
 import com.google.android.gms.common.api.ResultCallback;
@@ -36,6 +34,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 import butterknife.InjectView;
+import retrofit.Callback;
+import retrofit.RetrofitError;
 import timber.log.Timber;
 
 /**
@@ -112,23 +112,24 @@ public class ArrowTaggedActivity extends GdgNavDrawerActivity {
                     taggedOrganizers = mergeIds(new String(conflictResult.getLocalData()), new String(conflictResult.getServerData()));
                 }
 
-                groupDirectory.getDirectory(new Response.Listener<Directory>() {
+                groupDirectory.getHub().getDirectory(new Callback<Directory>() {
+
                     @Override
-                    public void onResponse(Directory directory) {
+                    public void success(final Directory directory, final retrofit.client.Response response) {
                         String[] orgas = taggedOrganizers.split("\\|");
-                        for(int i = 0; i < orgas.length; i++) {
+                        for (int i = 0; i < orgas.length; i++) {
                             String orga = orgas[i];
 
                             Chapter orgaChapter = null;
-                            for(Chapter c : directory.getGroups()) {
-                                if(c.getOrganizers().contains(orga)) {
+                            for (Chapter c : directory.getGroups()) {
+                                if (c.getOrganizers().contains(orga)) {
                                     orgaChapter = c;
                                     break;
                                 }
                             }
 
 
-                            if(orgaChapter != null) {
+                            if (orgaChapter != null) {
                                 final Organizer organizer = new Organizer();
                                 organizer.plusId = orga;
                                 organizer.chapterName = orgaChapter.getName();
@@ -146,13 +147,12 @@ public class ArrowTaggedActivity extends GdgNavDrawerActivity {
 
                         }
                     }
-                }, new Response.ErrorListener() {
-                    @Override
-                    public void onErrorResponse(VolleyError volleyError) {
-                        Timber.e("Error", volleyError);
-                    }
-                }).execute();
 
+                    @Override
+                    public void failure(final RetrofitError error) {
+                        Timber.e("Error", error);
+                    }
+                });
             }
         });
     }
